@@ -105,3 +105,10 @@ http_file(
     sha256 = "c6b3a7d7d3e7b70c6f51b706a3b90bd01833846c54d32ca32f0027f00226ff6d",
     urls = ["https://github.com/stedolan/jq/releases/download/jq-1.5/jq-linux64"],
 )
+
+http_archive(
+    name = "protobuf",
+    sha256 = "94c414775f275d876e5e0e4a276527d155ab2d0da45eed6b7734301c330be36e",
+    strip_prefix = "protobuf-3.3.0",
+    urls = ["https://github.com/google/protobuf/archive/v3.3.0.tar.gz"],
+)

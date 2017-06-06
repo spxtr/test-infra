@@ -52,3 +52,19 @@ filegroup(
     tags = ["automanaged"],
     visibility = ["//visibility:public"],
 )
+
+action_listener(
+    name = "gofmt-all",
+    mnemonics = ["GoCompile"],
+    extra_actions = [":gofmt_test"],
+    visibility = ["//visibility:public"],
+)
+
+extra_action(
+    name = "gofmt_test",
+    cmd = "$(location @protobuf//:protoc) --decode_raw < $(EXTRA_ACTION_FILE)",
+    tools = [
+        "@protobuf//:protoc",
+        "@io_bazel_rules_go_toolchain//:toolchain",
+    ],
+)
