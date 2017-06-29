@@ -1,4 +1,18 @@
-# Life of a Prow Job
+# Prow Architecture
+
+Prow comprises a collection of services that live in a Kubernetes cluster. We architected it to avoid several pitfalls that we encountered while maintaining Jenkins and mungegithub:
+
+* **Deployments must be rolled out with no downtime.** It is not acceptable to force updates to happen outside of working hours, especially when projects are distributed around the world. We found ourselves in this place with Jenkins, where updates took a considerable amount of time and often had to be rolled back due to bugs. With mungegithub updating is less painful, however it still results in confusion for developers who happen to check the page in the few minutes that it is down. Prow uses stateless Kubernetes deployments to solve this problem.
+* **Config must be stored in source control.** While it’s possible to store Jenkins results in source control using tools like Jenkins Job Builder, it’s certainly not easy. Prow uses Kubernetes ConfigMaps to store application config. This also makes it possible to update them without redeploying the binaries.
+* **Application state is hard, so let others handle that.** We constantly faced issues with Jenkins state becoming corrupted in various ways. Instead, prow lets GitHub and etcd (via Kubernetes) store its state.
+
+### `cmd/hook`
+
+![cmd/hook](./hook.svg)
+
+`cmd/hook` is a stateless, replicated server that listens to GitHub webhooks and dispatches them to plugins. Plugins are individual go packages that register to receive hooks at init time.
+
+## Life of a Prow Job
 
 I comment `/test all` on a PR. GitHub creates a JSON object representing that action and sends a webhook to prow. [Here](https://github.com/kubernetes/test-infra/tree/c8829eef589a044126289cb5b4dc8e85db3ea22f/prow/cmd/phony/examples) are some examples of webhook payloads.
 
