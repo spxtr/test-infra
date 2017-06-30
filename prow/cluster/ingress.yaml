@@ -33,7 +33,7 @@ spec:
       - path: /*
         backend:
           serviceName: deck
-          servicePort: 80
+          servicePort: 8080
       - path: /hook
         backend:
           serviceName: hook
@@ -44,7 +44,7 @@ spec:
       - path: /*
         backend:
           serviceName: deck
-          servicePort: 80
+          servicePort: 8080
       - path: /hook
         backend:
           serviceName: hook
