@@ -33,10 +33,10 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: deck
-        image: gcr.io/k8s-prow/deck:0.32
+        image: gcr.io/k8s-prow/deck:0.31
         ports:
           - name: http
-            containerPort: 8080
+            containerPort: 80
         args:
         - --jenkins-url=$(JENKINS_URL)
         - --build-cluster=/etc/cluster/cluster
