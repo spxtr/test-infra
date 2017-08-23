@@ -24,6 +24,7 @@ import (
 	"github.com/Sirupsen/logrus"
 	"github.com/shurcooL/githubql"
 
+	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
 )
 
@@ -94,6 +95,10 @@ func (f *fgc) GetRef(o, r, ref string) (string, error) {
 }
 
 func (f *fgc) Query(ctx context.Context, q interface{}, vars map[string]interface{}) error {
+	return nil
+}
+
+func (f *fgc) Merge(org, repo string, number int, details github.MergeDetails) error {
 	return nil
 }
 

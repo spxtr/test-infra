@@ -28,11 +28,13 @@ import (
 	"k8s.io/test-infra/prow/config"
 	"k8s.io/test-infra/prow/github"
 	"k8s.io/test-infra/prow/kube"
+	"k8s.io/test-infra/prow/npj"
 )
 
 type githubClient interface {
 	GetRef(string, string, string) (string, error)
 	Query(context.Context, interface{}, map[string]interface{}) error
+	Merge(string, string, int, github.MergeDetails) error
 }
 
 // Controller knows how to sync PRs and PJs.
@@ -170,11 +172,47 @@ func (c *Controller) syncSubpool(ctx context.Context, sp subpool) error {
 	}
 	successes, pendings, nones := accumulate(presubmits, sp.prs, sp.pjs)
 	if len(successes) > 0 {
-		c.log.Infof("Merge PR #%d.", int(pickSmallestNumber(successes).Number))
+		pr := pickSmallestNumber(successes)
+		c.log.Infof("Merging PR #%d.", int(pr.Number))
+		if err := c.ghc.Merge(sp.org, sp.repo, int(pr.Number), github.MergeDetails{
+			SHA: string(pr.HeadRef.Target.OID),
+		}); err != nil {
+			if _, ok := err.(github.ModifiedHeadError); ok {
+				c.log.Info("Merge failed: PR was modified.")
+			} else if _, ok = err.(github.UnmergablePRError); ok {
+				c.log.Warning("Merge failed: PR is unmergable. How did it pass tests?!")
+			} else {
+				return err
+			}
+		}
 	} else if len(pendings) > 0 {
 		c.log.Info("Do nothing. Waiting for pending PRs.")
 	} else if len(nones) > 0 {
-		c.log.Infof("Trigger tests for PR #%d.", int(pickSmallestNumber(nones).Number))
+		pr := pickSmallestNumber(nones)
+		c.log.Infof("Trigger tests for PR #%d.", int(pr.Number))
+		for _, ps := range c.ca.Config().Presubmits[sp.org+"/"+sp.repo] {
+			if ps.SkipReport || !ps.AlwaysRun || !ps.RunsAgainstBranch(sp.branch) {
+				continue
+			}
+			pj := npj.NewProwJob(npj.PresubmitSpec(ps, kube.Refs{
+				Org:     sp.org,
+				Repo:    sp.repo,
+				BaseRef: sp.branch,
+				BaseSHA: sp.sha,
+				Pulls: []kube.Pull{
+					{
+						Number: int(pr.Number),
+						Author: string(pr.Author.Login),
+						SHA:    string(pr.HeadRef.Target.OID),
+					},
+				},
+			}))
+			if _, err := c.kc.CreateProwJob(pj); err != nil {
+				return err
+			}
+		}
+	} else {
+		c.log.Info("Do nothing. No PRs in the pool.")
 	}
 	return nil
 }
@@ -257,7 +295,10 @@ func (c *Controller) search(ctx context.Context, q string) ([]pullRequest, error
 }
 
 type pullRequest struct {
-	Number  githubql.Int
+	Number githubql.Int
+	Author struct {
+		Login githubql.String
+	}
 	BaseRef struct {
 		Name   githubql.String
 		Prefix githubql.String
