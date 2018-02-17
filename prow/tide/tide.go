@@ -128,15 +128,48 @@ func byRepoAndNumber(prs []PullRequest) map[string]map[int]PullRequest {
 }
 
 // Returns expected status state and description.
-// TODO(spxtr): Useful information such as "missing label: foo."
-func expectedStatus(pr PullRequest, pool map[string]map[int]PullRequest) (string, string) {
+func expectedStatus(q config.TideQuery, pr PullRequest, pool map[string]map[int]PullRequest) (string, string) {
 	if _, ok := pool[string(pr.Repository.NameWithOwner)][int(pr.Number)]; !ok {
-		return github.StatusPending, statusNotInPool
+		desc := statusNotInPool
+		var missingLabels []string
+		for _, l1 := range q.Labels {
+			var found bool
+			for _, l2 := range pr.Labels.Nodes {
+				if string(l2.Name) == l1 {
+					found = true
+					break
+				}
+			}
+			if !found {
+				missingLabels = append(missingLabels, l1)
+			}
+		}
+		if len(missingLabels) == 1 {
+			desc += fmt.Sprintf(" Needs %s label.", missingLabels[0])
+		} else if len(missingLabels) > 1 {
+			desc += fmt.Sprintf(" Needs %s labels.", strings.Join(missingLabels, ", "))
+		}
+		var presentLabels []string
+		for _, l1 := range q.MissingLabels {
+			for _, l2 := range pr.Labels.Nodes {
+				if string(l2.Name) == l1 {
+					presentLabels = append(presentLabels, l1)
+					break
+				}
+			}
+		}
+		if len(presentLabels) == 1 {
+			desc += fmt.Sprintf(" Should not have %s label.", presentLabels[0])
+		} else if len(presentLabels) > 1 {
+			desc += fmt.Sprintf(" Should not have %s labels.", strings.Join(presentLabels, ", "))
+		}
+
+		return github.StatusPending, desc
 	}
 	return github.StatusSuccess, statusInPool
 }
 
-func (c *Controller) setStatuses(all, pool []PullRequest) {
+func (c *Controller) setStatuses(q config.TideQuery, all, pool []PullRequest) {
 	poolM := byRepoAndNumber(pool)
 	for _, pr := range all {
 		log := c.logger.WithFields(pr.logFields())
@@ -147,7 +180,7 @@ func (c *Controller) setStatuses(all, pool []PullRequest) {
 			continue
 		}
 
-		wantState, wantDesc := expectedStatus(pr, poolM)
+		wantState, wantDesc := expectedStatus(q, pr, poolM)
 		var actualState githubql.StatusState
 		var actualDesc string
 		for _, ctx := range contexts {
@@ -194,8 +227,8 @@ func (c *Controller) Sync() error {
 			return err
 		}
 		all = append(all, allPRs...)
+		c.setStatuses(q, allPRs, poolPRs)
 	}
-	c.setStatuses(all, pool)
 
 	var pjs []kube.ProwJob
 	var err error
@@ -728,6 +761,11 @@ type PullRequest struct {
 		// We can't raise this too much or we could hit the limit of 50,000 nodes
 		// per query: https://developer.github.com/v4/guides/resource-limitations/#node-limit
 	} `graphql:"commits(last: 4)"`
+	Labels struct {
+		Nodes []struct {
+			Name githubql.String
+		}
+	} `graphql:"labels(first: 10)"`
 }
 
 type Commit struct {

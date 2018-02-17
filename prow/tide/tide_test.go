@@ -471,7 +471,7 @@ func TestSetStatuses(t *testing.T) {
 		}
 
 		c := &Controller{ghc: fc, ca: ca, logger: log}
-		c.setStatuses([]PullRequest{pr}, pool)
+		c.setStatuses(config.TideQuery{}, []PullRequest{pr}, pool)
 		if str, err := log.String(); err != nil {
 			t.Fatalf("For case %s: failed to get log output: %v", tc.name, err)
 		} else if str != initialLog {
